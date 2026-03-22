@@ -6,9 +6,16 @@ services:
     ports:
       - 3001:3001
       - 3002:3002
+    networks:
+      - ibb8-net
     environment:
 
       # Mandatory for GitPod to map host env to the container, thus GitPod can dynamically configure the public URL of Logto;
       # Or, you can leverage it for local testing.
       # - PORT=3001
       # - ADMIN_PORT=3002
+
+networks:
+  ibb8-net:
+    external: true
+    name: ibb8-net
