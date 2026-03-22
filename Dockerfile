@@ -40,8 +40,10 @@ RUN rm -rf .scripts pnpm-*.yaml packages/cloud
 ###### [STAGE] Seal ######
 FROM node:22-alpine as app
 WORKDIR /etc/logto
+COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY --from=builder /etc/logto .
 RUN mkdir -p /etc/logto/packages/cli/alteration-scripts && chmod g+w /etc/logto/packages/cli/alteration-scripts
 EXPOSE 3001
-ENTRYPOINT ["npm", "run"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["start"]
