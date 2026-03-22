@@ -7,13 +7,8 @@ services:
       - 3001:3001
       - 3002:3002
     environment:
-      - TRUST_PROXY_HEADER=1
-      - NODE_TLS_REJECT_UNAUTHORIZED=0
-      # - isMultipleCustomDomainsEnabled=true
-      - DB_URL=postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-admin123}@host.docker.internal:5432/${POSTGRES_DB:-logto}
+
       # Mandatory for GitPod to map host env to the container, thus GitPod can dynamically configure the public URL of Logto;
       # Or, you can leverage it for local testing.
       # - PORT=3001
       # - ADMIN_PORT=3002
-      - ENDPOINT=https://login.ibb8.store
-      - ADMIN_ENDPOINT=https://useradmin.ibb8.store
