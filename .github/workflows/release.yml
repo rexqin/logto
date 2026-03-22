@@ -101,8 +101,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/logto-io/logto
-            svhd/logto
+            ghcr.io/rexqin/logto
+            dolphinux/logto
           tags: |
             type=edge
 
