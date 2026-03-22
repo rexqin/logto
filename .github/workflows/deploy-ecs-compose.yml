@@ -25,6 +25,12 @@ on:
         description: 检出仓库 ref（用于取 docker-compose.yml）
         required: false
         default: develop
+  push:
+    branches:
+      - develop
+      - main
+    paths:
+      - docker-compose.yml
 
 concurrency:
   group: deploy-ecs-compose
@@ -40,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.git_ref }}
+          ref: ${{ inputs.git_ref || github.ref }}
           fetch-depth: 1
 
       - name: Fetch secrets from Infisical
