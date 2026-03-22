@@ -1,7 +1,7 @@
 # This compose file is for demonstration only, do not use in prod.
 services:
   app:
-    image: dolphinux/logto:${TAG-latest}
+    image: registry.cn-hangzhou.aliyuncs.com/rexqin/logto:${TAG-latest}
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
     ports:
       - 3001:3001
