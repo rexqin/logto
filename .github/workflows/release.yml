@@ -1,13 +1,10 @@
 name: Release
 
+# 仅 Git tag 推送触发（不再在 develop 分支 push 时构建 edge / 发版）
 on:
   push:
-    branches:
-      - develop
-    # 仅 branches 时 push tag 不会触发本 workflow；要打 latest 等镜像 tag 需列出 tags
     tags:
       - '*'
-  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
