@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     branches:
-      - master
+      - develop
   workflow_dispatch:
 
 concurrency:
@@ -23,13 +23,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, BOT_PAT under /logto in Infisical (keys must match env names)
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/logto-io/logto
-            svhd/logto
+            ghcr.io/rexqin/logto
+            dolphinux/logto
           # https://github.com/docker/metadata-action#typesemver
           tags: |
             type=semver,pattern={{version}}
@@ -40,15 +50,15 @@ jobs:
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: silverhand-bot
-          password: ${{ secrets.BOT_PAT }}
+          password: ${{ env.BOT_PAT }}
 
       - name: Setup Depot
         uses: depot/setup-action@v1
@@ -77,6 +87,15 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -90,8 +109,8 @@ jobs:
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -99,7 +118,7 @@ jobs:
           registry: |
             ghcr.io
           username: silverhand-bot
-          password: ${{ secrets.BOT_PAT }}
+          password: ${{ env.BOT_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -116,16 +135,26 @@ jobs:
   # Publish packages and create git tags if needed
   publish-and-tag:
     runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTOMATION_TOKEN }}
+    permissions:
+      contents: read
+      id-token: write
 
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
     steps:
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - uses: actions/checkout@v4
         with:
           # Set Git operations with the bot PAT since we have tag protection rule
-          token: ${{ secrets.BOT_PAT }}
+          token: ${{ env.BOT_PAT }}
           fetch-depth: 0
 
       - name: Setup Node and pnpm
@@ -137,26 +166,40 @@ jobs:
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
         with:
-          gpg_private_key: ${{ secrets.BOT_GPG_KEY }}
-          passphrase: ${{ secrets.BOT_GPG_PASSPHRASE }}
+          gpg_private_key: ${{ env.BOT_GPG_KEY }}
+          passphrase: ${{ env.BOT_GPG_PASSPHRASE }}
           git_user_signingkey: true
           git_commit_gpgsign: true
           git_tag_gpgsign: true
 
       - name: Configure Git user
         run: |
-          git config --global user.email bot@silverhand.io
-          git config --global user.name silverhand-bot
+          git config --global user.email 40061167@qq.com
+          git config --global user.name rexqin
 
       - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NPM_AUTOMATION_TOKEN }}
         run: node .scripts/publish.js
 
   create-github-release:
     environment: release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+      id-token: write
 
     steps:
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -176,7 +219,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.BOT_PAT }}
+          token: ${{ env.BOT_PAT }}
           body: ""
           files: /tmp/logto.tar.gz
           append_body: true
