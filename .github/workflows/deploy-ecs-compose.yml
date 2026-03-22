@@ -50,7 +50,7 @@ jobs:
           identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
           project-slug: project-nd-zj
           env-slug: dev
-          secret-path: /ecs
+          secret-path: /logto
 
       - name: Validate required secrets
         run: |
@@ -115,7 +115,8 @@ jobs:
           fi
           "${SSH[@]}" "mv -f ${REMOTE_PATH}/.env.remote ${REMOTE_PATH}/.env"
 
-      - name: Docker compose pull and up
+      # 先 down 再 pull/up：避免同名 compose 项目已有容器时仅 up 导致旧容器/网络残留或端口冲突
+      - name: Docker compose down, pull and up
         env:
           ECS_HOST: ${{ env.ECS_HOST }}
           ECS_USER: ${{ env.ECS_USER }}
@@ -129,7 +130,7 @@ jobs:
           fi
           PORT="${ECS_SSH_PORT:-22}"
           ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}" \
-            "set -e; cd ${REMOTE_PATH} && docker compose pull && docker compose up -d --remove-orphans"
+            "set -e; cd ${REMOTE_PATH} && docker compose down --remove-orphans && docker compose pull && docker compose up -d --remove-orphans"
 
       - name: Remove local SSH key
         if: always()
