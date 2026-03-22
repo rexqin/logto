@@ -3,7 +3,7 @@ name: Main
 on:
   push:
     branches:
-      - develop
+      - master
       - "push-action/**"
   pull_request:
 
