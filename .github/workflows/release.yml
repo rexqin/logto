@@ -4,7 +4,7 @@ name: Release
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -62,14 +62,17 @@ jobs:
           username: silverhand-bot
           password: ${{ env.BOT_PAT }}
 
-      - name: Setup Depot
-        uses: depot/setup-action@v1
+      # Depot project 属上游组织，fork 无权限；改用 Buildx + QEMU 构建多架构
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push
-        uses: depot/build-push-action@v1
+        uses: docker/build-push-action@v6
         with:
-          platforms: linux/amd64, linux/arm64
-          project: g902cp6dvv
+          platforms: linux/amd64,linux/arm64
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
