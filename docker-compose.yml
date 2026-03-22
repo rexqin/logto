@@ -1,6 +1,6 @@
 # This compose file is for demonstration only, do not use in prod.
 services:
-  app:
+  logto:
     image: registry.cn-hangzhou.aliyuncs.com/rexqin/logto:${TAG-latest}
     entrypoint: ["sh", "-c", "npm run cli db seed -- --swe && npm start"]
     ports:

@@ -89,7 +89,7 @@ jobs:
         env:
           LOGTO_IMAGE: ${{ env.LOGTO_IMAGE }}
         run: |
-          printf '%s\n' 'services:' '  app:' "    image: ${LOGTO_IMAGE}" > docker-compose.override.yml
+          printf '%s\n' 'services:' '  logto:' "    image: ${LOGTO_IMAGE}" > docker-compose.override.yml
 
       - name: Install SSH key
         run: |
