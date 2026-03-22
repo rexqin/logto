@@ -136,7 +136,7 @@ jobs:
           fi
           PORT="${ECS_SSH_PORT:-22}"
           ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}" \
-            "set -e; cd ${REMOTE_PATH} && docker compose down --remove-orphans && docker compose pull && docker compose up -d --remove-orphans"
+            "set -e; cd ${REMOTE_PATH} && docker compose  down && docker compose --env-file .env up -d --remove-orphans"
 
       - name: Remove local SSH key
         if: always()
