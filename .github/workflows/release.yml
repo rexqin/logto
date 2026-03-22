@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - develop
+    # 仅 branches 时 push tag 不会触发本 workflow；要打 latest 等镜像 tag 需列出 tags
+    tags:
+      - '*'
   workflow_dispatch:
 
 concurrency:
@@ -165,6 +168,17 @@ jobs:
           pnpm-version: 10
           node-version: ^22.14.0
 
+      # 无 TTY 的 CI 里默认 pinentry 会报 Inappropriate ioctl for device；必须在导入密钥前启用 loopback
+      - name: Prepare GPG for headless signing
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          touch ~/.gnupg/gpg.conf ~/.gnupg/gpg-agent.conf
+          grep -q '^use-agent' ~/.gnupg/gpg.conf || echo 'use-agent' >> ~/.gnupg/gpg.conf
+          grep -q '^pinentry-mode loopback' ~/.gnupg/gpg.conf || echo 'pinentry-mode loopback' >> ~/.gnupg/gpg.conf
+          grep -q '^allow-loopback-pinentry' ~/.gnupg/gpg-agent.conf || echo 'allow-loopback-pinentry' >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent 2>/dev/null || true
+
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
         with:
@@ -176,6 +190,7 @@ jobs:
 
       - name: Configure Git user
         run: |
+          git config --global gpg.program "$(command -v gpg)"
           git config --global user.email 40061167@qq.com
           git config --global user.name rexqin
 
