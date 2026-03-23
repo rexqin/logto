@@ -74,13 +74,10 @@ jobs:
         run: |
           umask 077
           : > .env.remote
-          { echo "TAG=${TAG:-latest}"; } >> .env.remote
-          [ -n "${DB_URL:-}" ] && printf '%s\n' "DB_URL=${DB_URL}" >> .env.remote
-          [ -n "${POSTGRES_USER:-}" ] && printf '%s\n' "POSTGRES_USER=${POSTGRES_USER}" >> .env.remote
-          [ -n "${POSTGRES_PASSWORD:-}" ] && printf '%s\n' "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env.remote
-          [ -n "${POSTGRES_DB:-}" ] && printf '%s\n' "POSTGRES_DB=${POSTGRES_DB}" >> .env.remote
-          [ -n "${ENDPOINT:-}" ] && printf '%s\n' "ENDPOINT=${ENDPOINT}" >> .env.remote
-          [ -n "${ADMIN_ENDPOINT:-}" ] && printf '%s\n' "ADMIN_ENDPOINT=${ADMIN_ENDPOINT}" >> .env.remote
+          env | LC_ALL=C sort >> .env.remote
+          if ! rg '^TAG=' .env.remote >/dev/null; then
+            printf '%s\n' 'TAG=latest' >> .env.remote
+          fi
 
       - name: Optional compose override (LOGTO_IMAGE)
         if: ${{ env.LOGTO_IMAGE != '' }}
@@ -136,6 +133,6 @@ jobs:
           ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}" \
             "set -e; cd ${REMOTE_PATH} && docker compose  down && docker compose --env-file .env up -d --remove-orphans"
 
-      - name: Remove local SSH key
-        if: always()
-        run: rm -f ~/.ssh/ecs_deploy_key
+      # - name: Remove local SSH key
+      #   if: always()
+      #   run: rm -f ~/.ssh/ecs_deploy_key
