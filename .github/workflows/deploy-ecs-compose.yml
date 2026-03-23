@@ -1,0 +1,141 @@
+# 在阿里云 ECS 上通过 SSH 使用本仓库的 docker-compose.yml 部署 Logto。
+# 前置：ECS 已安装 Docker 与 Compose 插件；安全组放行来自 GitHub Actions  runner 的 SSH（或使用 self-hosted runner / 堡垒机）。
+#
+# Infisical（示例路径 /ecs，可在下方改成 /logto 等与现有路径一致）建议存放：
+#   ECS_HOST          — ECS 公网 IP 或域名
+#   ECS_USER          — SSH 用户（如 root、ecs-user）
+#   ECS_SSH_PRIVATE_KEY — 私钥全文（含 BEGIN/END，Infisical 多行文本）
+#   ECS_SSH_PORT      — 可选，默认 22
+#   ECS_DEPLOY_PATH   — 可选，远程目录，默认 ~/logto
+#   TAG               — 可选，镜像 tag，默认 latest（与 compose 中 svhd/logto:${TAG:-latest} 对应）
+#   DB_URL            — 生产库连接串（勿用 host.docker.internal；可用 RDS 内网或宿主机 IP）
+#   POSTGRES_USER     — 可选，compose 内变量
+#   POSTGRES_PASSWORD — 可选
+#   POSTGRES_DB       — 可选
+#   ENDPOINT          — Logto 对外端点
+#   ADMIN_ENDPOINT    — 管理控制台端点
+# 若镜像仓库与 compose 中 svhd/logto 不一致，可在 Infisical 增加 LOGTO_IMAGE，工作流会生成 compose.override.yml 覆盖 image。
+
+name: Deploy ECS (Logto)
+
+on:
+  workflow_dispatch:
+    inputs:
+      git_ref:
+        description: 检出仓库 ref（用于取 docker-compose.yml）
+        required: false
+        default: develop
+  push:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: deploy-ecs-compose
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.git_ref || github.ref }}
+          fetch-depth: 1
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
+      - name: Validate required secrets
+        run: |
+          test -n "${ECS_HOST:-}" || { echo "::error::Infisical 缺少 ECS_HOST"; exit 1; }
+          test -n "${ECS_USER:-}" || { echo "::error::Infisical 缺少 ECS_USER"; exit 1; }
+          test -n "${ECS_SSH_PRIVATE_KEY:-}" || { echo "::error::Infisical 缺少 ECS_SSH_PRIVATE_KEY"; exit 1; }
+
+      - name: Write remote .env (no echo)
+        env:
+          TAG: ${{ env.TAG }}
+          DB_URL: ${{ env.DB_URL }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+          ENDPOINT: ${{ env.ENDPOINT }}
+          ADMIN_ENDPOINT: ${{ env.ADMIN_ENDPOINT }}
+        run: |
+          umask 077
+          : > .env.remote
+          { echo "TAG=${TAG:-latest}"; } >> .env.remote
+          [ -n "${DB_URL:-}" ] && printf '%s\n' "DB_URL=${DB_URL}" >> .env.remote
+          [ -n "${POSTGRES_USER:-}" ] && printf '%s\n' "POSTGRES_USER=${POSTGRES_USER}" >> .env.remote
+          [ -n "${POSTGRES_PASSWORD:-}" ] && printf '%s\n' "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" >> .env.remote
+          [ -n "${POSTGRES_DB:-}" ] && printf '%s\n' "POSTGRES_DB=${POSTGRES_DB}" >> .env.remote
+          [ -n "${ENDPOINT:-}" ] && printf '%s\n' "ENDPOINT=${ENDPOINT}" >> .env.remote
+          [ -n "${ADMIN_ENDPOINT:-}" ] && printf '%s\n' "ADMIN_ENDPOINT=${ADMIN_ENDPOINT}" >> .env.remote
+
+      - name: Optional compose override (LOGTO_IMAGE)
+        if: ${{ env.LOGTO_IMAGE != '' }}
+        env:
+          LOGTO_IMAGE: ${{ env.LOGTO_IMAGE }}
+        run: |
+          printf '%s\n' 'services:' '  logto:' "    image: ${LOGTO_IMAGE}" > docker-compose.override.yml
+
+      - name: Install SSH key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${ECS_SSH_PRIVATE_KEY}" | sed 's/\\n/\n/g' > ~/.ssh/ecs_deploy_key
+          chmod 600 ~/.ssh/ecs_deploy_key
+          ssh-keyscan -p "${ECS_SSH_PORT:-22}" -H "${ECS_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Ensure remote dir and sync files
+        env:
+          ECS_HOST: ${{ env.ECS_HOST }}
+          ECS_USER: ${{ env.ECS_USER }}
+          ECS_SSH_PORT: ${{ env.ECS_SSH_PORT }}
+          ECS_DEPLOY_PATH: ${{ env.ECS_DEPLOY_PATH }}
+        run: |
+          if [ -n "${ECS_DEPLOY_PATH:-}" ]; then
+            REMOTE_PATH="${ECS_DEPLOY_PATH}"
+          else
+            REMOTE_PATH='~/logto'
+          fi
+          PORT="${ECS_SSH_PORT:-22}"
+          SSH=(ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}")
+          SCP=(scp -i ~/.ssh/ecs_deploy_key -P "$PORT" -o StrictHostKeyChecking=yes)
+          "${SSH[@]}" "mkdir -p ${REMOTE_PATH}"
+          "${SCP[@]}" docker-compose.yml .env.remote "${ECS_USER}@${ECS_HOST}:${REMOTE_PATH}/"
+          if [ -f docker-compose.override.yml ]; then
+            "${SCP[@]}" docker-compose.override.yml "${ECS_USER}@${ECS_HOST}:${REMOTE_PATH}/"
+          fi
+          "${SSH[@]}" "mv -f ${REMOTE_PATH}/.env.remote ${REMOTE_PATH}/.env"
+
+      # 先 down 再 pull/up：避免同名 compose 项目已有容器时仅 up 导致旧容器/网络残留或端口冲突
+      - name: Docker compose down, pull and up
+        env:
+          ECS_HOST: ${{ env.ECS_HOST }}
+          ECS_USER: ${{ env.ECS_USER }}
+          ECS_SSH_PORT: ${{ env.ECS_SSH_PORT }}
+          ECS_DEPLOY_PATH: ${{ env.ECS_DEPLOY_PATH }}
+        run: |
+          if [ -n "${ECS_DEPLOY_PATH:-}" ]; then
+            REMOTE_PATH="${ECS_DEPLOY_PATH}"
+          else
+            REMOTE_PATH='~/logto'
+          fi
+          PORT="${ECS_SSH_PORT:-22}"
+          ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}" \
+            "set -e; cd ${REMOTE_PATH} && docker compose  down && docker compose --env-file .env up -d --remove-orphans"
+
+      - name: Remove local SSH key
+        if: always()
+        run: rm -f ~/.ssh/ecs_deploy_key

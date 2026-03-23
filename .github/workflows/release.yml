@@ -1,10 +1,10 @@
 name: Release
 
+# 仅 Git tag 推送触发（不再在 develop 分支 push 时构建 edge / 发版）
 on:
   push:
-    branches:
-      - master
-  workflow_dispatch:
+    tags:
+      - "*"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
@@ -23,48 +23,72 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN, BOT_PAT,
+      #   ALIYUN_ACR_REGISTRY（如 registry.cn-hangzhou.aliyuncs.com）、ALIYUN_ACR_NAMESPACE（ACR 命名空间）、
+      #   ALIYUN_ACR_USERNAME、ALIYUN_ACR_PASSWORD — 均在 Infisical /logto，key 与 env 名一致
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/logto-io/logto
-            svhd/logto
+            ghcr.io/rexqin/logto
+            dolphinux/logto
+            ${{ env.ALIYUN_ACR_REGISTRY }}/${{ env.ALIYUN_ACR_NAMESPACE }}/logto
           # https://github.com/docker/metadata-action#typesemver
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=edge
+            # 非 semver 的 Git tag（如 latest）仍能生成镜像 tag
+            type=ref,event=tag
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: silverhand-bot
-          password: ${{ secrets.BOT_PAT }}
+          password: ${{ env.BOT_PAT }}
 
-      - name: Setup Depot
-        uses: depot/setup-action@v1
+      - name: Login to Alibaba Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_ACR_REGISTRY }}
+          username: ${{ env.ALIYUN_ACR_USERNAME }}
+          password: ${{ env.ALIYUN_ACR_PASSWORD }}
+
+      # Depot project 属上游组织，fork 无权限；改用 Buildx + QEMU 构建多架构
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Build and push
-        uses: depot/build-push-action@v1
+        uses: docker/build-push-action@v6
         with:
-          platforms: linux/amd64, linux/arm64
-          project: g902cp6dvv
+          platforms: linux/amd64,linux/arm64
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # Build and push the edge image on every master push
-  # Use official docker workflows since we only need to build amd64 images.
+  # Build and push the edge image on branch push (develop is not repo default → type=edge alone yields no tags)
   dockerize-edge:
     if: ${{ !startsWith(github.ref, 'refs/tags/')}}
     runs-on: ubuntu-latest
@@ -77,21 +101,32 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ghcr.io/logto-io/logto
-            svhd/logto
+            ghcr.io/rexqin/logto
+            dolphinux/logto
+            ${{ env.ALIYUN_ACR_REGISTRY }}/${{ env.ALIYUN_ACR_NAMESPACE }}/logto
+          # develop 非默认分支时 type=edge 常无输出；raw 保证始终有 tag 可 push
           tags: |
-            type=edge
+            type=raw,value=edge
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
+          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -99,7 +134,14 @@ jobs:
           registry: |
             ghcr.io
           username: silverhand-bot
-          password: ${{ secrets.BOT_PAT }}
+          password: ${{ env.BOT_PAT }}
+
+      - name: Login to Alibaba Cloud Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ALIYUN_ACR_REGISTRY }}
+          username: ${{ env.ALIYUN_ACR_USERNAME }}
+          password: ${{ env.ALIYUN_ACR_PASSWORD }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -116,16 +158,26 @@ jobs:
   # Publish packages and create git tags if needed
   publish-and-tag:
     runs-on: ubuntu-latest
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTOMATION_TOKEN }}
+    permissions:
+      contents: read
+      id-token: write
 
     if: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
     steps:
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - uses: actions/checkout@v4
         with:
           # Set Git operations with the bot PAT since we have tag protection rule
-          token: ${{ secrets.BOT_PAT }}
+          token: ${{ env.BOT_PAT }}
           fetch-depth: 0
 
       - name: Setup Node and pnpm
@@ -134,29 +186,55 @@ jobs:
           pnpm-version: 10
           node-version: ^22.14.0
 
+      # 无 TTY 的 CI 里默认 pinentry 会报 Inappropriate ioctl for device；必须在导入密钥前启用 loopback
+      - name: Prepare GPG for headless signing
+        run: |
+          mkdir -p ~/.gnupg
+          chmod 700 ~/.gnupg
+          touch ~/.gnupg/gpg.conf ~/.gnupg/gpg-agent.conf
+          grep -q '^use-agent' ~/.gnupg/gpg.conf || echo 'use-agent' >> ~/.gnupg/gpg.conf
+          grep -q '^pinentry-mode loopback' ~/.gnupg/gpg.conf || echo 'pinentry-mode loopback' >> ~/.gnupg/gpg.conf
+          grep -q '^allow-loopback-pinentry' ~/.gnupg/gpg-agent.conf || echo 'allow-loopback-pinentry' >> ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent 2>/dev/null || true
+
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@v6
         with:
-          gpg_private_key: ${{ secrets.BOT_GPG_KEY }}
-          passphrase: ${{ secrets.BOT_GPG_PASSPHRASE }}
+          gpg_private_key: ${{ env.BOT_GPG_KEY }}
+          passphrase: ${{ env.BOT_GPG_PASSPHRASE }}
           git_user_signingkey: true
           git_commit_gpgsign: true
           git_tag_gpgsign: true
 
       - name: Configure Git user
         run: |
-          git config --global user.email bot@silverhand.io
-          git config --global user.name silverhand-bot
+          git config --global gpg.program "$(command -v gpg)"
+          git config --global user.email 40061167@qq.com
+          git config --global user.name rexqin
 
       - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ env.NPM_AUTOMATION_TOKEN }}
         run: node .scripts/publish.js
 
   create-github-release:
     environment: release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+      id-token: write
 
     steps:
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: dev
+          secret-path: /logto
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -176,7 +254,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.BOT_PAT }}
+          token: ${{ env.BOT_PAT }}
           body: ""
           files: /tmp/logto.tar.gz
           append_body: true
