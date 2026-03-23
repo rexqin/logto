@@ -25,6 +25,10 @@ on:
         description: 检出仓库 ref（用于取 docker-compose.yml）
         required: false
         default: develop
+  push:
+    branches:
+      - develop
+      - main
 
 concurrency:
   group: deploy-ecs-compose
