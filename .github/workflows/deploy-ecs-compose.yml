@@ -73,11 +73,26 @@ jobs:
           ADMIN_ENDPOINT: ${{ env.ADMIN_ENDPOINT }}
         run: |
           umask 077
-          : > .env.remote
-          env | LC_ALL=C sort >> .env.remote
-          if ! rg '^TAG=' .env.remote >/dev/null; then
-            printf '%s\n' 'TAG=latest' >> .env.remote
-          fi
+          python - <<'PY'
+          import os
+
+          def encode(value: str) -> str:
+              escaped = (
+                  value.replace("\\", "\\\\")
+                  .replace("\n", "\\n")
+                  .replace("\r", "\\r")
+                  .replace('"', '\\"')
+              )
+              return f'"{escaped}"'
+
+          env_map = dict(os.environ)
+          if not env_map.get("TAG"):
+              env_map["TAG"] = "latest"
+
+          with open(".env.remote", "w", encoding="utf-8") as f:
+              for key in sorted(env_map):
+                  f.write(f"{key}={encode(env_map[key])}\n")
+          PY
 
       - name: Optional compose override (LOGTO_IMAGE)
         if: ${{ env.LOGTO_IMAGE != '' }}
