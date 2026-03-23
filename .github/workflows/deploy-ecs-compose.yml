@@ -16,7 +16,7 @@
 #   ADMIN_ENDPOINT    — 管理控制台端点
 # 若镜像仓库与 compose 中 svhd/logto 不一致，可在 Infisical 增加 LOGTO_IMAGE，工作流会生成 compose.override.yml 覆盖 image。
 
-name: Deploy ECS (docker compose)
+name: Deploy ECS (Logto)
 
 on:
   workflow_dispatch:
@@ -25,12 +25,6 @@ on:
         description: 检出仓库 ref（用于取 docker-compose.yml）
         required: false
         default: develop
-  push:
-    branches:
-      - develop
-      - main
-    paths:
-      - docker-compose.yml
 
 concurrency:
   group: deploy-ecs-compose
