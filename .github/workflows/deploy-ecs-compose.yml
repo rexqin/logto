@@ -47,7 +47,7 @@ jobs:
           ref: ${{ inputs.git_ref || github.ref }}
           fetch-depth: 1
 
-      - name: Fetch secrets from Infisical
+      - name: Fetch secrets from Infisical for deploy
         uses: Infisical/secrets-action@v1.0.15
         with:
           method: oidc
@@ -55,44 +55,22 @@ jobs:
           project-slug: project-nd-zj
           env-slug: prod
           secret-path: /logto
+          
+    - name: Fetch secrets from Infisical for release
+        uses: Infisical/secrets-action@v1.0.15
+        with:
+          method: oidc
+          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+          project-slug: project-nd-zj
+          env-slug: prod
+          export-type: env
+          secret-path: /logto
 
       - name: Validate required secrets
         run: |
           test -n "${ECS_HOST:-}" || { echo "::error::Infisical 缺少 ECS_HOST"; exit 1; }
           test -n "${ECS_USER:-}" || { echo "::error::Infisical 缺少 ECS_USER"; exit 1; }
           test -n "${ECS_SSH_PRIVATE_KEY:-}" || { echo "::error::Infisical 缺少 ECS_SSH_PRIVATE_KEY"; exit 1; }
-
-      - name: Write .env for docker compose (no echo)
-        env:
-          TAG: ${{ env.TAG }}
-          DB_URL: ${{ env.DB_URL }}
-          POSTGRES_USER: ${{ env.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ env.POSTGRES_DB }}
-          ENDPOINT: ${{ env.ENDPOINT }}
-          ADMIN_ENDPOINT: ${{ env.ADMIN_ENDPOINT }}
-        run: |
-          umask 077
-          python - <<'PY'
-          import os
-
-          def encode(value: str) -> str:
-              escaped = (
-                  value.replace("\\", "\\\\")
-                  .replace("\n", "\\n")
-                  .replace("\r", "\\r")
-                  .replace('"', '\\"')
-              )
-              return f'"{escaped}"'
-
-          env_map = dict(os.environ)
-          if not env_map.get("TAG"):
-              env_map["TAG"] = "latest"
-
-          with open(".env", "w", encoding="utf-8") as f:
-              for key in sorted(env_map):
-                  f.write(f"{key}={encode(env_map[key])}\n")
-          PY
 
       - name: Install SSH key
         run: |
