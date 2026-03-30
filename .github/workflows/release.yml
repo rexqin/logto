@@ -32,7 +32,7 @@ jobs:
           method: oidc
           identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
           project-slug: project-nd-zj
-          env-slug: dev
+          env-slug: prod
           secret-path: /logto
 
       - name: Docker meta
@@ -107,7 +107,7 @@ jobs:
           method: oidc
           identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
           project-slug: project-nd-zj
-          env-slug: dev
+          env-slug: prod
           secret-path: /logto
 
       - name: Docker meta
@@ -171,7 +171,7 @@ jobs:
           method: oidc
           identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
           project-slug: project-nd-zj
-          env-slug: dev
+          env-slug: prod
           secret-path: /logto
 
       - uses: actions/checkout@v4
@@ -232,7 +232,7 @@ jobs:
           method: oidc
           identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
           project-slug: project-nd-zj
-          env-slug: dev
+          env-slug: prod
           secret-path: /logto
 
       - uses: actions/checkout@v4

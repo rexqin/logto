@@ -53,7 +53,7 @@ jobs:
           method: oidc
           identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
           project-slug: project-nd-zj
-          env-slug: dev
+          env-slug: prod
           secret-path: /logto
 
       - name: Validate required secrets
@@ -148,6 +148,6 @@ jobs:
           ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}" \
             "set -e; cd ${REMOTE_PATH} && docker compose  down && docker compose --env-file .env up -d --remove-orphans"
 
-      # - name: Remove local SSH key
-      #   if: always()
-      #   run: rm -f ~/.ssh/ecs_deploy_key
+      - name: Remove local SSH key
+        if: always()
+        run: rm -f ~/.ssh/ecs_deploy_key
