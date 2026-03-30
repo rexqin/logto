@@ -56,15 +56,15 @@ jobs:
           env-slug: prod
           secret-path: /logto
           
-    - name: Fetch secrets from Infisical for release
-        uses: Infisical/secrets-action@v1.0.15
-        with:
-          method: oidc
-          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
-          project-slug: project-nd-zj
-          env-slug: prod
-          export-type: env
-          secret-path: /logto
+      - name: Fetch secrets from Infisical for release
+          uses: Infisical/secrets-action@v1.0.15
+          with:
+            method: oidc
+            identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
+            project-slug: project-nd-zj
+            env-slug: prod
+            export-type: env
+            secret-path: /logto
 
       - name: Validate required secrets
         run: |
