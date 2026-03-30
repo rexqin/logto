@@ -66,6 +66,15 @@ jobs:
           export-type: file
           secret-path: /logto
 
+      - name: Normalize .env quotes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          env_file = Path(".env")
+          env_file.write_text(env_file.read_text(encoding="utf-8").replace("'", '"'), encoding="utf-8")
+          PY
+
       - name: Validate required secrets
         run: |
           test -n "${ECS_HOST:-}" || { echo "::error::Infisical 缺少 ECS_HOST"; exit 1; }
