@@ -87,7 +87,13 @@
     },
     "patchedDependencies": {
       "tsup": "patches/tsup.patch"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@swc/core",
+      "core-js",
+      "esbuild",
+      "puppeteer"
+    ]
   },
   "dependencies": {
     "@logto/cli": "workspace:^",
