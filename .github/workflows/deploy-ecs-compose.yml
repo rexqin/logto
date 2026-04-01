@@ -29,6 +29,14 @@ on:
     branches:
       - develop
       - main
+  # 供 release.yml 等在工作流中复用：镜像构建推送后再部署 ECS
+  workflow_call:
+    inputs:
+      git_ref:
+        description: 检出仓库 ref（默认使用触发方 workflow 的 github.ref）
+        type: string
+        required: false
+        default: ""
 
 concurrency:
   group: deploy-ecs-compose
@@ -44,6 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # workflow_dispatch：用输入的 git_ref；workflow_call / push：inputs 为空时用 github.ref（与调用方一致）
           ref: ${{ inputs.git_ref || github.ref }}
           fetch-depth: 1
 

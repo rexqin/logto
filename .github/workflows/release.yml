@@ -88,6 +88,13 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  # 镜像推送至仓库后，再按 deploy-ecs-compose 流程同步 compose/.env 并在 ECS 上 pull/up
+  deploy-ecs:
+    needs: dockerize
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: ./.github/workflows/deploy-ecs-compose.yml
+    secrets: inherit
+
   # Build and push the edge image on branch push (develop is not repo default → type=edge alone yields no tags)
   dockerize-edge:
     if: ${{ !startsWith(github.ref, 'refs/tags/')}}
