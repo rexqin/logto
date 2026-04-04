@@ -35,6 +35,9 @@ const buildConfig = (mode: string): UserConfig => ({
     port: 5004,
     hmr: {
       port: 6004,
+      host: 'account-hmr.useradmin.ibb8.store',
+      protocol: 'wss',
+      clientPort: 443,
     },
     fs: {
       allow: ['..'],

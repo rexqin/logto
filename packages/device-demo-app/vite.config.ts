@@ -10,6 +10,9 @@ const buildConfig = (mode: string): UserConfig => ({
     port: 5005,
     hmr: {
       port: 6005,
+      host: 'device-demo-app-hmr.useradmin.ibb8.store',
+      protocol: 'wss',
+      clientPort: 443,
     },
   },
   plugins: [
