@@ -1,5 +1,32 @@
 {
+  "task.allowAutomaticTasks": "on",
   "typescript.tsdk": "node_modules/typescript/lib",
+  "terminal.integrated.profiles.osx": {
+    "zsh (nvm use)": {
+      "path": "/bin/zsh",
+        "args": [
+        "-c",
+        "export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; [ -n \"$WORKSPACE\" ] && [ -d \"$WORKSPACE\" ] && cd \"$WORKSPACE\"; nvm use || true; exec zsh -i"
+      ],
+      "env": {
+        "WORKSPACE": "${workspaceFolder}"
+      }
+    }
+  },
+  "terminal.integrated.defaultProfile.osx": "zsh (nvm use)",
+  "terminal.integrated.profiles.linux": {
+    "bash (nvm use)": {
+      "path": "/bin/bash",
+      "args": [
+        "-c",
+        "export NVM_DIR=\"$HOME/.nvm\"; [ -s \"$NVM_DIR/nvm.sh\" ] && . \"$NVM_DIR/nvm.sh\"; [ -n \"$WORKSPACE\" ] && [ -d \"$WORKSPACE\" ] && cd \"$WORKSPACE\"; nvm use || true; exec bash -i"
+      ],
+      "env": {
+        "WORKSPACE": "${workspaceFolder}"
+      }
+    }
+  },
+  "terminal.integrated.defaultProfile.linux": "bash (nvm use)",
   "[scss]": {
     "editor.codeActionsOnSave": {
       "source.fixAll.stylelint": "explicit"

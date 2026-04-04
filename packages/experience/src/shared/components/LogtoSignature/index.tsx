@@ -170,7 +170,7 @@ const LogtoSignature = ({ className, theme }: Props) => {
     <div ref={containerRef} className={className} data-logto-signature-container="secured">
       <a
         ref={anchorRef}
-        aria-label="Powered By Logto"
+        aria-label="Powered By iBB8"
         className={styles.signature}
         data-logto-signature="secured"
         href={logtoUrl.toString()}
