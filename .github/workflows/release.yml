@@ -88,79 +88,12 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  # 镜像推送至仓库后，再按 deploy-ecs-compose 流程同步 compose/.env 并在 ECS 上 pull/up
+  # 镜像推送且 publish 完成后，再按 deploy-ecs-compose 同步 compose/.env 并在 ECS 上 pull/up
   deploy-ecs:
-    needs: dockerize
+    needs: [dockerize, publish-and-tag]
     if: startsWith(github.ref, 'refs/tags/')
     uses: ./.github/workflows/deploy-ecs-compose.yml
     secrets: inherit
-
-  # Build and push the edge image on branch push (develop is not repo default → type=edge alone yields no tags)
-  dockerize-edge:
-    if: ${{ !startsWith(github.ref, 'refs/tags/')}}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@v1.0.15
-        with:
-          method: oidc
-          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
-          project-slug: project-nd-zj
-          env-slug: prod
-          secret-path: /logto
-
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ghcr.io/rexqin/logto
-            dolphinux/logto
-            ${{ env.ALIYUN_ACR_REGISTRY }}/${{ env.ALIYUN_ACR_NAMESPACE }}/logto
-          # develop 非默认分支时 type=edge 常无输出；raw 保证始终有 tag 可 push
-          tags: |
-            type=raw,value=edge
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ env.DOCKERHUB_TOKEN }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: |
-            ghcr.io
-          username: silverhand-bot
-          password: ${{ env.BOT_PAT }}
-
-      - name: Login to Alibaba Cloud Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.ALIYUN_ACR_REGISTRY }}
-          username: ${{ env.ALIYUN_ACR_USERNAME }}
-          password: ${{ env.ALIYUN_ACR_PASSWORD }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push docker image
-        uses: docker/build-push-action@v6
-        with:
-          platforms: linux/amd64
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
 
   # Publish packages and create git tags if needed
   publish-and-tag:
@@ -169,7 +102,7 @@ jobs:
       contents: read
       id-token: write
 
-    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Fetch secrets from Infisical
@@ -223,45 +156,3 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ env.NPM_AUTOMATION_TOKEN }}
         run: node .scripts/publish.js
-
-  create-github-release:
-    environment: release
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-    permissions:
-      contents: write
-      id-token: write
-
-    steps:
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@v1.0.15
-        with:
-          method: oidc
-          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
-          project-slug: project-nd-zj
-          env-slug: prod
-          secret-path: /logto
-
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node and pnpm
-        uses: silverhand-io/actions-node-pnpm-run-steps@v5
-        with:
-          pnpm-version: 10
-          node-version: ^22.14.0
-
-      - name: Build
-        run: pnpm -r build
-
-      - name: Package
-        run: ./.scripts/package.sh
-
-      - name: Release
-        uses: softprops/action-gh-release@v2
-        with:
-          token: ${{ env.BOT_PAT }}
-          body: ""
-          files: /tmp/logto.tar.gz
-          append_body: true
