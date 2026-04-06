@@ -134,5 +134,7 @@ jobs:
             . ./.env
             set +a
             docker compose --env-file .env down --remove-orphans 2>/dev/null || true
+            TAG="${TAG:-latest}"
+            docker pull "registry.cn-hangzhou.aliyuncs.com/rexqin/logto:${TAG}"
             docker stack deploy --with-registry-auth -c docker-compose.yml "${ECS_STACK_NAME}"
             docker image prune -f
