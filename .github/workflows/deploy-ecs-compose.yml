@@ -86,50 +86,39 @@ jobs:
           test -n "${ECS_USER:-}" || { echo "::error::Infisical 缺少 ECS_USER"; exit 1; }
           test -n "${ECS_SSH_PRIVATE_KEY:-}" || { echo "::error::Infisical 缺少 ECS_SSH_PRIVATE_KEY"; exit 1; }
 
-      - name: Install SSH key
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "${ECS_SSH_PRIVATE_KEY}" | sed 's/\\n/\n/g' > ~/.ssh/ecs_deploy_key
-          chmod 600 ~/.ssh/ecs_deploy_key
-          ssh-keyscan -p "${ECS_SSH_PORT:-22}" -H "${ECS_HOST}" >> ~/.ssh/known_hosts 2>/dev/null || true
+      - name: Ensure remote directory
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.ECS_HOST }}
+          username: ${{ env.ECS_USER }}
+          key: ${{ env.ECS_SSH_PRIVATE_KEY }}
+          port: ${{ env.ECS_SSH_PORT || '22' }}
+          script: |
+            mkdir -p ${{ env.ECS_DEPLOY_PATH || '~/logto' }}
 
-      - name: Ensure remote dir and sync files
-        env:
-          ECS_HOST: ${{ env.ECS_HOST }}
-          ECS_USER: ${{ env.ECS_USER }}
-          ECS_SSH_PORT: ${{ env.ECS_SSH_PORT }}
-          ECS_DEPLOY_PATH: ${{ env.ECS_DEPLOY_PATH }}
-        run: |
-          if [ -n "${ECS_DEPLOY_PATH:-}" ]; then
-            REMOTE_PATH="${ECS_DEPLOY_PATH}"
-          else
-            REMOTE_PATH='~/logto'
-          fi
-          PORT="${ECS_SSH_PORT:-22}"
-          SSH=(ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}")
-          SCP=(scp -i ~/.ssh/ecs_deploy_key -P "$PORT" -o StrictHostKeyChecking=yes)
-          "${SSH[@]}" "mkdir -p ${REMOTE_PATH}"
-          "${SCP[@]}" docker-compose.yml "${ECS_USER}@${ECS_HOST}:${REMOTE_PATH}/"
-          "${SCP[@]}" .env "${ECS_USER}@${ECS_HOST}:${REMOTE_PATH}/.env"
+      - name: SCP docker-compose.yml and .env
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ env.ECS_HOST }}
+          username: ${{ env.ECS_USER }}
+          key: ${{ env.ECS_SSH_PRIVATE_KEY }}
+          port: ${{ env.ECS_SSH_PORT || '22' }}
+          source: "docker-compose.yml,.env"
+          target: ${{ env.ECS_DEPLOY_PATH || '~/logto' }}
 
       # 先 down 再 pull/up：避免同名 compose 项目已有容器时仅 up 导致旧容器/网络残留或端口冲突
       - name: Docker compose down, pull and up
-        env:
-          ECS_HOST: ${{ env.ECS_HOST }}
-          ECS_USER: ${{ env.ECS_USER }}
-          ECS_SSH_PORT: ${{ env.ECS_SSH_PORT }}
-          ECS_DEPLOY_PATH: ${{ env.ECS_DEPLOY_PATH }}
-        run: |
-          if [ -n "${ECS_DEPLOY_PATH:-}" ]; then
-            REMOTE_PATH="${ECS_DEPLOY_PATH}"
-          else
-            REMOTE_PATH='~/logto'
-          fi
-          PORT="${ECS_SSH_PORT:-22}"
-          ssh -i ~/.ssh/ecs_deploy_key -p "$PORT" -o StrictHostKeyChecking=yes "${ECS_USER}@${ECS_HOST}" \
-            "set -e; cd ${REMOTE_PATH} && docker compose --env-file .env down && docker compose --env-file .env pull && docker compose --env-file .env up --pull always -d --remove-orphans && docker image prune -f"
-
-      - name: Remove local SSH key
-        if: always()
-        run: rm -f ~/.ssh/ecs_deploy_key
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ env.ECS_HOST }}
+          username: ${{ env.ECS_USER }}
+          key: ${{ env.ECS_SSH_PRIVATE_KEY }}
+          port: ${{ env.ECS_SSH_PORT || '22' }}
+          command_timeout: 30m
+          script: |
+            set -e
+            cd ${{ env.ECS_DEPLOY_PATH || '~/logto' }}
+            docker compose --env-file .env down
+            docker compose --env-file .env pull
+            docker compose --env-file .env up --pull always -d --remove-orphans
+            docker image prune -f
