@@ -1,5 +1,6 @@
-# 在阿里云 ECS 上通过 SSH 使用本仓库的 docker-compose.yml 部署 Logto。
-# 前置：ECS 已安装 Docker 与 Compose 插件；安全组放行来自 GitHub Actions  runner 的 SSH（或使用 self-hosted runner / 堡垒机）。
+# 在阿里云 ECS 上通过 SSH 同步 compose 与 .env，并在 Swarm 管理节点执行 docker stack deploy。
+# 前置：目标机已 docker swarm init；已创建外部网络 ibb8-net（或与 compose 中 name 一致）；
+#   安全组放行 GitHub Actions runner 的 SSH。
 #
 # GitHub Environment「prod」中建议配置：
 #   INFISICAL_IDENTITY_ID — Secret（Infisical OIDC Machine Identity ID）
@@ -10,7 +11,9 @@
 #   ECS_SSH_PRIVATE_KEY — 私钥全文（含 BEGIN/END，Infisical 多行文本）
 #   ECS_SSH_PORT      — 可选，默认 22
 #   ECS_DEPLOY_PATH   — 可选，远程目录，默认 ~/logto
-#   TAG               — 可选，镜像 tag，默认 latest（与 compose 中 svhd/logto:${TAG:-latest} 对应）
+#   ECS_STACK_NAME    — Swarm stack 名称（docker stack deploy 最后一个参数）
+#   ECS_DEPLOY_NODE_ID — 部署目标节点 ID（docker node ls -q / docker node inspect；对应 compose placement）
+#   TAG               — 可选，镜像 tag，默认 latest（与 compose 中镜像 ${TAG:-latest} 对应）
 #   DB_URL            — 生产库连接串（勿用 host.docker.internal；可用 RDS 内网或宿主机 IP）
 #   POSTGRES_USER     — 可选，compose 内变量
 #   POSTGRES_PASSWORD — 可选
@@ -86,9 +89,14 @@ jobs:
 
       - name: Validate required secrets
         run: |
+          set -a
+          [ -f .env ] && . ./.env
+          set +a
           test -n "${ECS_HOST:-}" || { echo "::error::Infisical 缺少 ECS_HOST"; exit 1; }
           test -n "${ECS_USER:-}" || { echo "::error::Infisical 缺少 ECS_USER"; exit 1; }
           test -n "${ECS_SSH_PRIVATE_KEY:-}" || { echo "::error::Infisical 缺少 ECS_SSH_PRIVATE_KEY"; exit 1; }
+          test -n "${ECS_STACK_NAME:-}" || { echo "::error::Infisical/.env 缺少 ECS_STACK_NAME"; exit 1; }
+          test -n "${ECS_DEPLOY_NODE_ID:-}" || { echo "::error::Infisical/.env 缺少 ECS_DEPLOY_NODE_ID"; exit 1; }
 
       - name: Ensure remote directory
         uses: appleboy/ssh-action@v1.2.2
@@ -110,8 +118,8 @@ jobs:
           source: "docker-compose.yml,.env"
           target: ${{ env.ECS_DEPLOY_PATH || '~/logto' }}
 
-      # 先 down 再 pull/up：避免同名 compose 项目已有容器时仅 up 导致旧容器/网络残留或端口冲突
-      - name: Docker compose down, pull and up
+      # 若此前用 compose 单机部署过，先 down；再以 stack 滚动更新（镜像变量来自 .env）
+      - name: Docker stack deploy
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ env.ECS_HOST }}
@@ -122,7 +130,9 @@ jobs:
           script: |
             set -e
             cd ${{ env.ECS_DEPLOY_PATH || '~/logto' }}
-            docker compose --env-file .env down
-            docker compose --env-file .env pull
-            docker compose --env-file .env up --pull always -d --remove-orphans
+            set -a
+            . ./.env
+            set +a
+            docker compose --env-file .env down --remove-orphans 2>/dev/null || true
+            docker stack deploy --with-registry-auth -c docker-compose.yml "${ECS_STACK_NAME}"
             docker image prune -f

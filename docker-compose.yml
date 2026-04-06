@@ -1,4 +1,9 @@
-# This compose file is for demonstration only, do not use in prod.
+# Swarm stack：在管理节点执行
+#   docker stack deploy --with-registry-auth -c docker-compose.yml "$ECS_STACK_NAME"
+# 变量 TAG、ECS_DEPLOY_NODE_ID 等来自同目录 .env（Infisical 同步）。
+# 本地 docker compose up 会忽略 deploy 段，仍可用于简单验证。
+version: "3.8"
+
 services:
   logto:
     image: registry.cn-hangzhou.aliyuncs.com/rexqin/logto:${TAG:-latest}
@@ -6,18 +11,27 @@ services:
     ports:
       - 3001:3001
       - 3002:3002
-    # Optional (GitPod / local): set via environment mapping, e.g. PORT=3001, ADMIN_PORT=3002
     env_file:
       - .env
     networks:
       - ibb8-net
-    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 3001 || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 24
       start_period: 120s
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.id == ${ECS_DEPLOY_NODE_ID}
+      restart_policy:
+        condition: any
+        delay: 5s
+      update_config:
+        parallelism: 1
+        order: start-first
 
 networks:
   ibb8-net:
