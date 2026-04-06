@@ -78,14 +78,19 @@ jobs:
           export-type: file
           secret-path: /logto
 
-      - name: Normalize .env quotes
+      # 去掉 .env 中的弯引号与 ASCII 单双引号，避免 source / compose 解析异常
+      - name: Strip quotes from .env (sed)
         run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          env_file = Path(".env")
-          env_file.write_text(env_file.read_text(encoding="utf-8").replace("'", '"'), encoding="utf-8")
-          PY
+          set -euo pipefail
+          test -f .env || { echo "::error::missing .env"; exit 1; }
+          sed -i \
+            -e $'s/\xe2\x80\x98//g' \
+            -e $'s/\xe2\x80\x99//g' \
+            -e $'s/\xe2\x80\x9c//g' \
+            -e $'s/\xe2\x80\x9d//g' \
+            -e "s/'//g" \
+            -e 's/"//g' \
+            .env
 
       - name: Validate required secrets
         run: |
