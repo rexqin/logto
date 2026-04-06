@@ -121,11 +121,16 @@ jobs:
       # 若此前用 compose 单机部署过，先 down；再以 stack 滚动更新（镜像变量来自 .env）
       - name: Docker stack deploy
         uses: appleboy/ssh-action@v1.2.2
+        env:
+          TAG: ${{ env.TAG || 'latest' }}
+          ECS_STACK_NAME: ${{ env.ECS_STACK_NAME }}
+          ECS_DEPLOY_NODE_ID: ${{ env.ECS_DEPLOY_NODE_ID }}
         with:
           host: ${{ env.ECS_HOST }}
           username: ${{ env.ECS_USER }}
           key: ${{ env.ECS_SSH_PRIVATE_KEY }}
           port: ${{ env.ECS_SSH_PORT || '22' }}
+          envs: ECS_STACK_NAME,ECS_DEPLOY_NODE_ID,TAG
           command_timeout: 30m
           script: |
             set -e
