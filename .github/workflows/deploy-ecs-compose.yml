@@ -1,6 +1,9 @@
 # 在阿里云 ECS 上通过 SSH 使用本仓库的 docker-compose.yml 部署 Logto。
 # 前置：ECS 已安装 Docker 与 Compose 插件；安全组放行来自 GitHub Actions  runner 的 SSH（或使用 self-hosted runner / 堡垒机）。
 #
+# GitHub Environment「prod」中建议配置：
+#   INFISICAL_IDENTITY_ID — Secret（Infisical OIDC Machine Identity ID）
+#   INFISICAL_PROJECT_SLUG — Variable（如 project-nd-zj）
 # Infisical（示例路径 /ecs，可在下方改成 /logto 等与现有路径一致）建议存放：
 #   ECS_HOST          — ECS 公网 IP 或域名
 #   ECS_USER          — SSH 用户（如 root、ecs-user）
@@ -45,6 +48,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: prod
     steps:
       - uses: actions/checkout@v4
         with:
@@ -56,17 +60,17 @@ jobs:
         uses: Infisical/secrets-action@v1.0.15
         with:
           method: oidc
-          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
-          project-slug: project-nd-zj
+          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: prod
-          secret-path: /logto
+          secret-path: /logto/ci
 
       - name: Fetch secrets from Infisical for release
         uses: Infisical/secrets-action@v1.0.15
         with:
           method: oidc
-          identity-id: 436a2630-fad8-475b-8f00-5ab158e9919e
-          project-slug: project-nd-zj
+          identity-id: ${{ secrets.INFISICAL_IDENTITY_ID }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
           env-slug: prod
           export-type: file
           secret-path: /logto
